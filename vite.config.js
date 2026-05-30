@@ -6,6 +6,21 @@ export default defineConfig({
   base: '/FINANCIAL-PRO/',
   build: {
     outDir: 'dist',
-    sourcemap: false
-  }
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          supabase: ['@supabase/supabase-js'],
+          charts: ['recharts'],
+          utils: ['date-fns', 'papaparse', 'lucide-react'],
+        },
+      },
+    },
+  },
+  esbuild: {
+    supported: {
+      'top-level-await': true,
+    },
+  },
 })
