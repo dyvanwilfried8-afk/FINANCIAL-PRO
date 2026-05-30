@@ -86,14 +86,40 @@ const API_SOURCES = [
       note: 'La feuille doit être partagée en lecture publique OU tu dois utiliser OAuth2 pour les feuilles privées.',
     },
     fetch: async (fields) => {
-      const { apiKey, sheetId, range } = fields
-      if (!apiKey || !sheetId) throw new Error('Clé API et ID de feuille requis')
-      const r = range || 'A1:Z1000'
+      const { apiKey, sheetId: rawId, range } = fields
+      if (!apiKey || !rawId) throw new Error('Clé API et ID de feuille requis')
+
+      // Auto-extraire l'ID si l'utilisateur colle l'URL complète
+      const idMatch = rawId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+      const sheetId = idMatch ? idMatch[1] : rawId.trim()
+
+      const r = range?.trim() || 'A1:Z1000'
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(r)}?key=${apiKey}`
-      const res = await fetch(url)
+
+      let res
+      try {
+        res = await fetch(url)
+      } catch {
+        // CORS bloqué — fallback vers export CSV public
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
+        const csvRes = await fetch(csvUrl)
+        if (!csvRes.ok) throw new Error('CORS bloqué et la feuille n\'est pas publique. Active le partage public ou restreins la clé API à ton domaine.')
+        const text = await csvRes.text()
+        return await new Promise((resolve, reject) => {
+          Papa.parse(text, {
+            header: true, skipEmptyLines: true,
+            complete: r => resolve(r.data),
+            error: e => reject(e),
+          })
+        })
+      }
+
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error?.message || `Erreur HTTP ${res.status}`)
+        const err = await res.json().catch(() => ({}))
+        const msg = err.error?.message || `Erreur HTTP ${res.status}`
+        if (res.status === 403) throw new Error(`Accès refusé : ${msg}\n→ Vérifie que la feuille est partagée publiquement ET que ta clé API autorise le domaine github.io`)
+        if (res.status === 400) throw new Error(`ID de feuille invalide : ${msg}`)
+        throw new Error(msg)
       }
       const data = await res.json()
       return sheetsApiToRows(data)

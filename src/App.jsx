@@ -34,16 +34,17 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter basename="/FINANCIAL-PRO">
         <Routes>
+          {/* Page auth — route publique exacte */}
           <Route
-            path="/"
+            index
             element={
               <PublicRoute>
                 <AuthPage />
               </PublicRoute>
             }
           />
+          {/* App protégée — routes imbriquées sous le layout */}
           <Route
-            path="/"
             element={
               <ProtectedRoute>
                 <AppLayout />
